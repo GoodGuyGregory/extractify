@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import pandas as pd
 import sys
 import requests
+import time
 
 
 def checkConnection(sp):
@@ -65,8 +66,10 @@ def parse_tracks(sp, saved_track_data, saved_tracks):
         
         album_url = saved_tracks[i]['track']['album']['external_urls']['spotify']
         
+        time.sleep(30)
         genres = get_artist_genre(sp, song_artist_url, album_url)
 
+        time.sleep(30)
         release_date = get_album_release_year(sp, album_url)
 
         # adds the song details into dictionary
@@ -93,6 +96,7 @@ def get_artist_genre(sp, spotify_external_url, spotify_album_url):
     found_artist = ''
     try:
         artist = sp.artist(spotify_external_url)
+        time.sleep(10)
         found_artist = artist['name']
         if len(artist['genres']) == 0:
             # check the album genre:
@@ -169,19 +173,20 @@ def main():
     offset_index = 0
 
     while offset_index != total_num_saved:
-        results = sp.current_user_saved_tracks(limit=20, offset=offset_index)
+        results = sp.current_user_saved_tracks(limit=50, offset=offset_index)
         
         total_saved_tracks = results['items']
 
-        sys.stdout.write(f'\rLoading Song Data... {round(((offset_index+20)/total_num_saved)*100)}%')
-
+        sys.stdout.write(f'\rLoading Song Data... {round(((offset_index+50)/total_num_saved)*100)}%')
+        
         parse_tracks(sp=sp, saved_track_data=saved_tracks_data, saved_tracks=total_saved_tracks)
+        time.sleep(20)
         
         sys.stdout.flush()
 
         # control offset increase:
-        if (offset_index + 20) < total_num_saved:
-            offset_index += 20
+        if (offset_index + 50) < total_num_saved:
+            offset_index += 50
         else:
             # determine the difference to offset
             if (offset_index + 20) > total_num_saved:
