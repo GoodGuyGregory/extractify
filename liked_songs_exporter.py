@@ -2,6 +2,9 @@ import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 import os
 from dotenv import load_dotenv
+import pandas as pd
+import sys
+import requests
 
 
 def checkConnection(sp):
@@ -32,17 +35,54 @@ def get_artists(artists_list):
     if len(artists_list) == 1:
         artists += artists_list[0]['name']
         return artists
+    
+    else:
+        
+        for i in range(len(artists_list)):
+            artist_name = artists_list[i]['name']
+            if i == len(artists_list) - 1:
+                if artist_name not in artists:
+                    artists += artist_name 
+            else:
+                artists += artist_name  + ', '
 
-    for i in range(len(artists_list)):
-        artist_name = artists_list[i]['name']
-        artists += artist_name  + ', '
-
-        if i == len(artists_list - 1):
-            artists += artist_name 
         
     return artists
 
 
+def parse_tracks(sp, saved_track_data, saved_tracks):
+
+    for i in range(len(saved_tracks)):
+        song_name = saved_tracks[i]['track']['name']
+        
+        length = calc_duration_ms(saved_tracks[i]['track']['duration_ms'])
+        
+        album_name = saved_tracks[i]['track']['album']['name']
+        
+        artists = get_artists(saved_tracks[i]['track']['artists'])
+        
+        song_artist_url = saved_tracks[i]['track']['artists'][0]['external_urls']['spotify']
+        
+        album_url = saved_tracks[i]['track']['album']['external_urls']['spotify']
+        
+        genres = get_artist_genre(sp, song_artist_url, album_url)
+
+        release_date = get_album_release_year(sp, album_url)
+
+        # adds the song details into dictionary
+        saved_track_data['Song Name'].append(song_name)
+        
+        saved_track_data['Duration'].append(length)
+        
+        saved_track_data['Album'].append(album_name)
+        
+        saved_track_data['Artists'].append(artists)
+        
+        saved_track_data['Genre'].append(genres)
+
+        saved_track_data['Release Date'].append(release_date)
+        
+    
 
 def calc_duration_ms(duration_ms):
     minute_conversion = duration_ms / 1000 / 60
@@ -50,18 +90,45 @@ def calc_duration_ms(duration_ms):
     return str(minute_total).replace('.',':')
 
 def get_artist_genre(sp, spotify_external_url, spotify_album_url):
-    artist = sp.artist(spotify_external_url)
-    if len(artist['genres']) == 0:
-        # check the album genre:
-        album = sp.album(spotify_album_url)
-        return album['genres']
-    else:
-        return artist['genres']
+    found_artist = ''
+    try:
+        artist = sp.artist(spotify_external_url)
+        found_artist = artist['name']
+        if len(artist['genres']) == 0:
+            # check the album genre:
+            album = sp.album(spotify_album_url)
+            return album['genres']
+        else:
+            return artist['genres']
+    except requests.exceptions.ReadTimeout as e:
+        print(f'\nAn Error Occured Determining Artist Genre: {e}')
+        print(f'\nOccured for Artist: {found_artist}')
+    except Exception as e:
+        print(f'\nAn Unexpected Error Occurred: {e}')
+        print(f'\nOccurred for Artist: {found_artist}')
 
 def get_album_release_year(sp, spotify_external_url):
-    album = sp.album(spotify_external_url)
-    return album['release_date']
+    found_album = ''
+    try: 
+        album = sp.album(spotify_external_url)
+        found_album = album['name']
+        return album['release_date']
+    except requests.exceptions.ReadTimeout as e:
+        print(f'\nAn Error Occurred Retrieving Album Year: {e}')
+        print(f'\nOccured for Album: {found_album}')
+    except Exception as e:
+        print(f'\nAn Unexpected Error Occurred: {e}')
+        print(f'\nOccurred for Album: {found_album}')
+
     
+
+def export_track_data(saved_tracks, user_name):
+    df = pd.DataFrame(saved_tracks)
+
+    file_name = user_name + '_liked_songs.csv'
+
+    df.to_csv(file_name, index=False)
+
 def main():
     # load the client variables
     load_dotenv()
@@ -87,21 +154,46 @@ def main():
     print(f'User Name: {current_user['display_name']}' )
     print(f'Total Liked Songs: {results['total']}')
 
-    saved_tracks = results['items']
-    
-    print("Last Liked Track:")
-    print("------------------------------")
-    print(f'Song Name: {saved_tracks[0]['track']['name']}')
-    print(f'Length: {calc_duration_ms(saved_tracks[0]['track']['duration_ms'])}')
-    print(f'Album Name: {saved_tracks[0]['track']['album']['name']}')
-    print(f'Artists: {get_artists(saved_tracks[0]['track']['artists'])}')
-    
-    song_artist_url = saved_tracks[0]['track']['artists'][0]['external_urls']['spotify']
-    album_url = saved_tracks[0]['track']['album']['external_urls']['spotify']
-    
-    print(f'Genre: {get_artist_genre(sp, song_artist_url, album_url)}')
-    print(f'Release Date: {get_album_release_year(sp, album_url)}')
-    
+    total_num_saved = results['total']
+
+    saved_tracks_data = {
+        'Song Name': [],
+        'Duration': [],
+        'Album': [],
+        'Artists': [],
+        'Genre':[], 
+        'Release Date': [],
+
+    }
+
+    offset_index = 0
+
+    while offset_index != total_num_saved:
+        results = sp.current_user_saved_tracks(limit=20, offset=offset_index)
+        
+        total_saved_tracks = results['items']
+
+        sys.stdout.write(f'\rLoading Song Data... {round(((offset_index+20)/total_num_saved)*100)}%')
+
+        parse_tracks(sp=sp, saved_track_data=saved_tracks_data, saved_tracks=total_saved_tracks)
+        
+        sys.stdout.flush()
+
+        # control offset increase:
+        if (offset_index + 20) < total_num_saved:
+            offset_index += 20
+        else:
+            # determine the difference to offset
+            if (offset_index + 20) > total_num_saved:
+                offset_index = (total_num_saved - offset_index) + offset_index
+
+
+    print('\n--------------------------------')
+    print('\nExporting Complete!')
+    print('--------------------------------')
+    print('Exporting Liked Songs')
+    user_name = current_user['display_name'].replace(' ', '_')
+    export_track_data(saved_tracks=saved_tracks_data, user_name=user_name )
     
 
 
