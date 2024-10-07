@@ -59,6 +59,8 @@ def parse_tracks(sp_clients, saved_track_data, saved_tracks):
         length = calc_duration_ms(saved_tracks[i]['track']['duration_ms'])
         
         album_name = saved_tracks[i]['track']['album']['name']
+
+        album_url = saved_tracks[i]['track']['album']['url']
         
         artists = get_artists(saved_tracks[i]['track']['artists'])
 
