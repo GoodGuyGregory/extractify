@@ -13,7 +13,6 @@ def get_artist_genre(sp, spotify_artist_id):
     found_artist = ''
     try:
         artist = sp.artist(spotify_artist_id)
-        time.sleep(5)
         found_artist = artist['name']
         if len(artist['genres']) != 0:
             # check the artist genre:
@@ -21,7 +20,7 @@ def get_artist_genre(sp, spotify_artist_id):
                 genres = ', '.join(artist['genres']) 
                 return genres
             else:
-                return artist['genres']
+                return artist['genres'][0]
         else:
             print(f"\nSpotify Doesn't list the Genre(s) for: {found_artist} ")
     except requests.exceptions.ReadTimeout as e:
@@ -35,7 +34,6 @@ def get_album_genre(sp, spotify_album_id):
     found_album = ''
     try:
         album = sp.album(spotify_album_id)
-        time.sleep(5)
         found_album = album['name']
         if len(album['genres']) != 0:
             # check the artist genre:
@@ -66,9 +64,11 @@ def determine_artist_genre(songs_df, sp_client, username):
 
     artist_count = 1
     for index, artist in enumerate(unique_artists):
-        sys.stdout.write(f'\rLoading Artist Genres... {round(((artist_count)/len(unique_artists))*100)}%')
+        sys.stdout.write(f'\rLoading Artist Genres... {round(((artist_count)/len(unique_artists))*100, 2)}%')
         
+        time.sleep(3)
         # per index reference assign the found genre based on the Spotify artist description
+        
         artist_genres.loc[index, 'Artist_Genre'] = get_artist_genre(sp_client, artist)
         artist_count += 1
         sys.stdout.flush()
@@ -80,6 +80,11 @@ def determine_artist_genre(songs_df, sp_client, username):
         artist_genres shape(,2) with Artist_id, ?Artist_Genre 
         
     """
+
+    # merge the data by id into the existing data_frame
+    # only merge the artist genres not the artist_id with how='left'
+    songs_df = songs_df.merge(artist_genres, on='Artist_id', how='left')
+
     print("Waiting 30 seconds before attempting to search the Album_ids")
     time.sleep(30)
 
@@ -92,9 +97,10 @@ def determine_artist_genre(songs_df, sp_client, username):
     album_genres['Album_Genre'] = None
 
     album_count = 1
-    for index, album in enumerate(album_genres):
-        sys.stdout.write(f'\rLoading Album Genres... {round(((album_count)/len(album_search_for_genre))*100)}%')
+    for index, album in enumerate(album_search_for_genre):
+        sys.stdout.write(f'\rLoading Album Genres... {round((album_count)/len(album_search_for_genre)*100, 2)}%')
         
+        time.sleep(3)
         # per index reference assign the found genre based on the Spotify artist description
         album_genres.loc[index, 'Album_Genre'] = get_album_genre(sp_client, album)
         album_count += 1
@@ -103,10 +109,6 @@ def determine_artist_genre(songs_df, sp_client, username):
     """
         album_genres shape(,2) with Album_id, ?Album_Genre
     """
-    
-    # merge the data by id into the existing data_frame
-    # only merge the artist genres not the artist_id with how='left'
-    songs_df = songs_df.merge(artist_genres, on='Artist_id', how='left')
 
     # merges the album_genre column into the dataframe
     songs_df = songs_df.merge(album_genres, on='Album_id', how='left')
