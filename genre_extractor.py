@@ -123,6 +123,19 @@ def determine_artist_genre(songs_df, sp_client, username):
     
     songs_df.to_csv(f'{username}_songs_with_artist_genre.csv',index=False)
 
+def determine_albun_release_year(songs_df, sp_client, user_name):
+    # aquire unique albums 
+    album_ids = songs_df['Album_id']
+
+    unique_album_id = album_ids.unique()
+    
+    # create the dataframe
+    artist_albums = pd.DataFrame(unique_album_id, columns=['Album_id'])
+    # creates the release date column
+    artist_albums['Release_Date'] = None
+
+
+
 def main():
     # create spotify clients:
 
@@ -139,19 +152,20 @@ def main():
                                                         ),requests_timeout=30)
 
     
-    # determine the genre with each artist from previous extraction
-    artists_details = pd.read_csv('Greg_Witt_liked_songs_with_artist_details.csv')
-
     current_directory = os.getcwd()
 
     user_name = ''
 
     for file in os.listdir(current_directory):
         # create regex.
-        liked_tracks_regex = r'_liked_songs'
+        liked_tracks_regex = r'_liked_songs_with_artist_details'
         match = re.search(liked_tracks_regex, file)
         if match is not None:
             user_name = match.string[:match.start()]
+            file_name = match.string
+            # determine the genre with each artist from previous extraction
+            artists_details = pd.read_csv(file_name)
+
             break
     
 
@@ -159,8 +173,19 @@ def main():
         determines the artist genre from the provided ids to reduce the number 
         of internal calls to the API
     '''
-    determine_artist_genre(songs_df=artists_details, sp_client=api_sp_client, username=user_name)
+    # determine_artist_genre(songs_df=artists_details, sp_client=api_sp_client, username=user_name)
 
+    for file in os.listdir(current_directory):
+        album_detail_regex = r'_songs_with_artist_genre'
+        match = re.search(album_detail_regex, file)
+        if match is not None:
+            file_name = match.string
+            album_details = pd.read_csv(file_name)
+        
+
+
+
+    determine_albun_release_year(songs_df=album_details, sp_client=api_sp_client, username=user_name)
 
 
 main()
