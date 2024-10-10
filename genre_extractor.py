@@ -51,6 +51,18 @@ def get_album_genre(sp, spotify_album_id):
         print(f'\nAn Unexpected Error Occurred: {e}')
         print(f'\nOccurred for Artist: {found_album}')
 
+def get_album_release_date(sp, spotify_album_id):
+    try:
+        album = sp.album(spotify_album_id)
+        
+        return album['release_date']
+
+    except requests.exceptions.ReadTimeout as e:
+        print(f'\nAn Error Occured Determining Album Release Date: {e}') 
+    except Exception as e:
+        print(f'\nAn Unexpected Error Occurred: {e}')
+
+
 def determine_artist_genre(songs_df, sp_client, username): 
     # identify the unique artists
     artists_album_ids = songs_df['Artist_id']
@@ -133,6 +145,24 @@ def determine_albun_release_year(songs_df, sp_client, user_name):
     artist_albums = pd.DataFrame(unique_album_id, columns=['Album_id'])
     # creates the release date column
     artist_albums['Release_Date'] = None
+    
+    album_count = 1
+    for index, album_id in enumerate(unique_album_id):
+        sys.stdout.write(f'\rLoading Artist Genres... {round(((album_count)/len(unique_album_id))*100, 2)}%')
+        
+        if index % 10 == 0:
+            time.sleep(7)
+        else:
+            time.sleep(5)
+        
+        artist_albums.loc[index,'Release_Date'] = get_album_release_date(sp_client, album_id) 
+        album_count += 1
+        sys.stdout.flush()
+
+    songs_df = songs_df.merge(artist_albums, on='Album_id', how='left')
+
+    songs_df.to_csv(f'{user_name}_songs_with_album_release_artist_genre.csv', index=False)
+
 
 
 
@@ -183,9 +213,10 @@ def main():
             album_details = pd.read_csv(file_name)
         
 
+    time.sleep(10)
+    print("Extracting Album Years")
 
-
-    determine_albun_release_year(songs_df=album_details, sp_client=api_sp_client, username=user_name)
+    determine_albun_release_year(songs_df=album_details, sp_client=api_sp_client, user_name=user_name)
 
 
 main()
