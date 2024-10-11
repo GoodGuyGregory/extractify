@@ -137,31 +137,68 @@ def determine_artist_genre(songs_df, sp_client, username):
 
 def determine_albun_release_year(songs_df, sp_client, user_name):
     # aquire unique albums 
-    album_ids = songs_df['Album_id']
 
-    unique_album_id = album_ids.unique()
-    
-    # create the dataframe
-    artist_albums = pd.DataFrame(unique_album_id, columns=['Album_id'])
-    # creates the release date column
-    artist_albums['Release_Date'] = None
-    
-    album_count = 1
-    for index, album_id in enumerate(unique_album_id):
-        sys.stdout.write(f'\rLoading Artist Genres... {round(((album_count)/len(unique_album_id))*100, 2)}%')
+    if 'Release_Date' not in songs_df.columns:
+
+        album_ids = songs_df['Album_id'][:1000]
+
+        unique_album_id = album_ids.unique()
         
-        if index % 10 == 0:
-            time.sleep(7)
-        else:
-            time.sleep(5)
+        # create the dataframe
+        artist_albums = pd.DataFrame(unique_album_id, columns=['Album_id'])
+        # creates the release date column
+        artist_albums['Release_Date'] = None
         
-        artist_albums.loc[index,'Release_Date'] = get_album_release_date(sp_client, album_id) 
-        album_count += 1
-        sys.stdout.flush()
+        album_count = 1
+        for index, album_id in enumerate(unique_album_id):
+            precentage_remaining = round(((album_count)/len(unique_album_id))*100, 2)
+            sys.stdout.write(f'\rLoading Album Release Years... {precentage_remaining}%')
+            
+            artist_albums.loc[index,'Release_Date'] = get_album_release_date(sp_client, album_id) 
+            album_count += 1
+            
+            if index == 1000:
+                break
 
-    songs_df = songs_df.merge(artist_albums, on='Album_id', how='left')
+            sys.stdout.flush()
 
-    songs_df.to_csv(f'{user_name}_songs_with_album_release_artist_genre.csv', index=False)
+        songs_df = songs_df.merge(artist_albums, on='Album_id', how='left')
+
+        songs_df.to_csv(f'{user_name}_songs_with_album_release_artist_genre.csv', index=False)
+
+    else:
+
+        # create the unique albums that are empty...
+        album_ids = songs_df[songs_df['Release_Date'].isnull()][:1000]
+
+        unique_album_id = album_ids['Album_id'].unique()
+        
+        # create the dataframe
+        artist_albums = pd.DataFrame(unique_album_id, columns=['Album_id'])
+        # creates the release date column
+        artist_albums['Release_Date'] = None
+        
+        album_count = 1
+        for index, album_id in enumerate(unique_album_id):
+            precentage_remaining = round(((album_count)/len(unique_album_id))*100, 2)
+            sys.stdout.write(f'\rLoading Album Release Years... {precentage_remaining}%')
+            
+            artist_albums.loc[index,'Release_Date'] = get_album_release_date(sp_client, album_id) 
+            album_count += 1
+            
+
+            sys.stdout.flush()
+
+        songs_df = songs_df.merge(artist_albums, on='Album_id', how='left', suffixes=('','_new'))
+
+        # Update the Release_Date column with the new values
+        songs_df['Release_Date'] = songs_df['Release_Date'].combine_first(songs_df['Release_Date_new'])
+
+        # Drop the temporary Release_Date_new column
+        songs_df.drop(columns=['Release_Date_new'], inplace=True)
+
+
+        songs_df.to_csv(f'{user_name}_songs_with_album_release_artist_genre.csv', index=False)
 
 
 
@@ -203,18 +240,31 @@ def main():
         determines the artist genre from the provided ids to reduce the number 
         of internal calls to the API
     '''
-    # determine_artist_genre(songs_df=artists_details, sp_client=api_sp_client, username=user_name)
 
     for file in os.listdir(current_directory):
         album_detail_regex = r'_songs_with_artist_genre'
         match = re.search(album_detail_regex, file)
         if match is not None:
-            file_name = match.string
-            album_details = pd.read_csv(file_name)
+            # check for possible batches that have run previously
+            found_batch_file = False
+            for file in os.listdir(current_directory):
+                album_release_regex = r'_songs_with_album_release_artist_genre.csv'
+                album_year_match = re.search(album_release_regex, file)
+                if album_year_match is not None:
+                    found_batch_file = True
+                    file_name = album_year_match.string
+                    album_details = pd.read_csv(file_name)
+                    break
+
+            if found_batch_file == False:
+                file_name = match.string
+                album_details = pd.read_csv(file_name)
+                break
+            else: 
+                break
         
 
-    time.sleep(10)
-    print("Extracting Album Years")
+    
 
     determine_albun_release_year(songs_df=album_details, sp_client=api_sp_client, user_name=user_name)
 
